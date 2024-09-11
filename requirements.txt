@@ -3,7 +3,7 @@ torch==2.1.0+cu121
 scikit-learn==1.5.1
 nltk==3.9.1
 tqdm
-numpy
+numpy==1.26.4
 pandas
 transformers==4.44.2
 datasets==2.21.0
