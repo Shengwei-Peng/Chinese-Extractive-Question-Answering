@@ -1,0 +1,13 @@
+--find-links https://download.pytorch.org/whl/torch_stable.html 
+torch==2.1.0+cu121
+scikit-learn==1.5.1
+nltk==3.9.1
+tqdm
+numpy
+pandas
+transformers==4.44.2
+datasets==2.21.0
+accelerate==0.34.2
+evaluate
+matplotlib
+gdown
