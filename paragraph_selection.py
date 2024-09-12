@@ -50,7 +50,7 @@ from transformers import (
 )
 from transformers.utils import PaddingStrategy
 
-from src.utils import setup_logging, load_dataset, predict_paragraph_selection
+from src.utils import setup_logging, load_dataset, plot_metrics, predict_paragraph_selection
 
 logger = get_logger(__name__)
 MODEL_CONFIG_CLASSES = list(MODEL_MAPPING.keys())
@@ -296,6 +296,11 @@ def parse_args():
             "Only applicable when `--with_tracking` is passed."
         ),
     )
+    parser.add_argument(
+        "--use_pretrained",
+        action="store_true",
+        help="If passed, use a pretrained model. Otherwise, train from scratch."
+    )
     args = parser.parse_args()
 
     if args.push_to_hub:
@@ -409,7 +414,7 @@ def main():
             "save it, and load it from here using --tokenizer_name."
         )
 
-    if args.model_name_or_path:
+    if args.model_name_or_path and args.use_pretrained:
         model = AutoModelForMultipleChoice.from_pretrained(
             args.model_name_or_path,
             from_tf=bool(".ckpt" in args.model_name_or_path),
@@ -497,6 +502,13 @@ def main():
         )
 
     if args.num_train_epochs > 0 and args.train_file is not None:
+        metrics = {
+            "train_losses": [],
+            "val_losses": [],
+            "train_accuracies": [],
+            "val_accuracies": []
+        }
+
         no_decay = ["bias", "LayerNorm.weight"]
         optimizer_grouped_parameters = [
             {
@@ -605,8 +617,7 @@ def main():
 
         for epoch in range(starting_epoch, args.num_train_epochs):
             model.train()
-            if args.with_tracking:
-                total_loss = 0
+            total_loss = 0
             if args.resume_from_checkpoint and epoch == starting_epoch and resume_step is not None:
                 active_dataloader = accelerator.skip_first_batches(train_dataloader, resume_step)
             else:
@@ -615,8 +626,17 @@ def main():
                 with accelerator.accumulate(model):
                     outputs = model(**batch)
                     loss = outputs.loss
-                    if args.with_tracking:
-                        total_loss += loss.detach().float()
+                    total_loss += loss.detach().float()
+
+                    predictions, references = accelerator.gather_for_metrics(
+                        (outputs.logits.argmax(dim=-1), batch["labels"])
+                    )
+
+                    metric.add_batch(
+                        predictions=predictions,
+                        references=references,
+                    )
+
                     accelerator.backward(loss)
                     optimizer.step()
                     lr_scheduler.step()
@@ -634,41 +654,57 @@ def main():
                 if completed_steps >= args.max_train_steps:
                     break
 
-            model.eval()
-            for batch in eval_dataloader:
-                with torch.no_grad():
-                    outputs = model(**batch)
-                predictions = outputs.logits.argmax(dim=-1)
-                predictions, references = accelerator.gather_for_metrics(
-                    (predictions, batch["labels"])
+            train_loss = total_loss / len(train_dataloader)
+            train_accuracy = metric.compute()["accuracy"]
+            metrics["train_losses"].append(train_loss)
+            metrics["train_accuracies"].append(train_accuracy)
+
+            if args.validation_file is not None:
+                model.eval()
+                epoch_val_loss = 0
+                metric.reset()
+
+                for batch in eval_dataloader:
+                    with torch.no_grad():
+                        outputs = model(**batch)
+                    loss = outputs.loss
+                    epoch_val_loss += loss.item()
+
+                    predictions, references = accelerator.gather_for_metrics(
+                        (outputs.logits.argmax(dim=-1), batch["labels"])
+                    )
+
+                    metric.add_batch(
+                        predictions=predictions,
+                        references=references,
+                    )
+
+                val_loss = epoch_val_loss / len(eval_dataloader)
+                val_accuracy = metric.compute()["accuracy"]
+                metrics["val_losses"].append(val_loss)
+                metrics["val_accuracies"].append(val_accuracy)
+
+                accelerator.print(
+                    f"Epoch {epoch+1}: Train Loss = {train_loss}, Train Accuracy = {train_accuracy}"
                 )
-                metric.add_batch(
-                    predictions=predictions,
-                    references=references,
+                accelerator.print(
+                    f"Epoch {epoch+1}: Valid Loss = {val_loss}, Valid Accuracy = {val_accuracy}"
                 )
 
-            eval_metric = metric.compute()
-            accelerator.print(f"epoch {epoch}: {eval_metric}")
-
-            if args.with_tracking:
-                log_data = {
-                    "accuracy": eval_metric,
-                    "train_loss": total_loss.item() / len(train_dataloader),
-                    "epoch": epoch,
-                    "step": completed_steps,
-                }
-                accelerator.log(log_data, step=completed_steps)
-
-                log_file_path = args.output_dir / "training_metrics.json"
-                if log_file_path.exists():
-                    with log_file_path.open("r+", encoding="utf-8") as log_file:
-                        existing_data = json.load(log_file)
-                        existing_data.append(log_data)
-                        log_file.seek(0)
-                        json.dump(existing_data, log_file, indent=4)
-                else:
-                    with log_file_path.open("w", encoding="utf-8") as log_file:
-                        json.dump([log_data], log_file, indent=4)
+                if args.with_tracking:
+                    accelerator.log(
+                        {
+                            "accuracy": val_accuracy,
+                            "train_loss": train_loss,
+                            "epoch": epoch+1,
+                            "step": completed_steps,
+                        },
+                        step=completed_steps,
+                    )
+            else:
+                accelerator.print(
+                    f"Epoch {epoch+1}: Train Loss = {train_loss}, Train Accuracy = {train_accuracy}"
+                )
 
             if args.push_to_hub and epoch < args.num_train_epochs - 1:
                 accelerator.wait_for_everyone()
@@ -691,6 +727,8 @@ def main():
             if args.checkpointing_steps == "epoch":
                 output_dir = args.output_dir / f"epoch_{epoch}"
                 accelerator.save_state(output_dir)
+
+        plot_metrics(metrics, args.validation_file is not None, args.output_dir)
 
         if args.with_tracking:
             accelerator.end_training()
@@ -726,10 +764,10 @@ def main():
                     repo_type="model",
                     token=args.hub_token,
                 )
-            all_results = {f"eval_{k}": v for k, v in eval_metric.items()}
-            all_results_path = args.output_dir / "all_results.json"
-            with all_results_path.open("w", encoding="utf-8") as f:
-                json.dump(all_results, f, indent=4)
+
+            metrics_path = output_dir / "metrics.json"
+            with metrics_path.open("w", encoding="utf-8") as f:
+                json.dump(metrics, f, indent=4)
 
 if __name__ == "__main__":
     main()

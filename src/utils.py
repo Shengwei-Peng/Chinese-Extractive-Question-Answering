@@ -8,9 +8,42 @@ from torch import nn
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from datasets import Dataset, DatasetDict
+import matplotlib.pyplot as plt
 
+
+def plot_metrics(metrics: dict[str, list[float]], has_validation: bool, output_dir: Path) -> None:
+    """plot_metrics"""
+    epochs = range(1, len(metrics['train_losses']) + 1)
+
+    plt.figure(figsize=(14, 6))
+
+    plt.subplot(1, 2, 1)
+    plt.plot(epochs, metrics['train_losses'], label="Training Loss")
+    if has_validation:
+        plt.plot(epochs, metrics['val_losses'], label="Validation Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Training and Validation Loss" if has_validation else "Training Loss")
+    plt.legend()
+    plt.grid(True)
+
+    plt.subplot(1, 2, 2)
+    plt.plot(epochs, metrics['train_accuracies'], label="Training Accuracy")
+    if has_validation:
+        plt.plot(epochs, metrics['val_accuracies'], label="Validation Accuracy")
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.title("Training and Validation Accuracy" if has_validation else "Training Accuracy")
+    plt.legend()
+    plt.grid(True)
+
+    plot_path = output_dir / "metrics_plot.png"
+    plt.tight_layout()
+    plt.savefig(plot_path)
+    plt.close()
 
 def setup_logging(output_dir: Path) -> None:
+    """setup_logging"""
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
