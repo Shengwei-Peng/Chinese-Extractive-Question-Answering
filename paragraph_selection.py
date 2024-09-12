@@ -626,7 +626,7 @@ def main():
                 with accelerator.accumulate(model):
                     outputs = model(**batch)
                     loss = outputs.loss
-                    total_loss += loss.detach().float()
+                    total_loss += loss.detach().cpu().item()
 
                     predictions, references = accelerator.gather_for_metrics(
                         (outputs.logits.argmax(dim=-1), batch["labels"])
@@ -662,13 +662,12 @@ def main():
             if args.validation_file is not None:
                 model.eval()
                 epoch_val_loss = 0
-                metric.reset()
 
                 for batch in eval_dataloader:
                     with torch.no_grad():
                         outputs = model(**batch)
                     loss = outputs.loss
-                    epoch_val_loss += loss.item()
+                    epoch_val_loss += loss.detach().cpu().item()
 
                     predictions, references = accelerator.gather_for_metrics(
                         (outputs.logits.argmax(dim=-1), batch["labels"])
@@ -765,7 +764,7 @@ def main():
                     token=args.hub_token,
                 )
 
-            metrics_path = output_dir / "metrics.json"
+            metrics_path = args.output_dir / "metrics.json"
             with metrics_path.open("w", encoding="utf-8") as f:
                 json.dump(metrics, f, indent=4)
 
