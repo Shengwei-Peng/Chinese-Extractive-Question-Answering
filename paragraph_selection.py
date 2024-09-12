@@ -14,14 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
-Fine-tuning a Transformers model on paragraph selection relying on the accelerate library.
+Fine-tuning a Transformers model for Paragraph Selection using Accelerate.
 """
-# You can also adapt this script on your own paragraph selection task.
-# Pointers for this are left as comments.
-
 import argparse
 import json
-import logging
 import math
 import os
 import random
@@ -54,14 +50,65 @@ from transformers import (
 )
 from transformers.utils import PaddingStrategy
 
-from src.utils import load_dataset, predict_paragraph_selection
-
+from src.utils import setup_logging, load_dataset, predict_paragraph_selection
 
 logger = get_logger(__name__)
-# You should update this to your particular problem to have better documentation of `model_type`
 MODEL_CONFIG_CLASSES = list(MODEL_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
 
+@dataclass
+class DataCollatorForMultipleChoice:
+    """
+    Data collator that will dynamically pad the inputs for paragraph selection received.
+
+    Args:
+        tokenizer ([`PreTrainedTokenizer`] or [`PreTrainedTokenizerFast`]):
+            The tokenizer used for encoding the data.
+        padding (`bool`, `str` or [`~utils.PaddingStrategy`], *optional*, defaults to `True`):
+            Select a strategy to pad the returned sequences (according to the model's padding side 
+            and padding index) among:
+
+            - `True` or `'longest'`: Pad to the longest sequence in the batch (or no padding if 
+              only a single sequence is provided).
+            - `'max_length'`: Pad to a maximum length specified with the argument `max_length` or 
+              to the maximum acceptable input length for the model if that argument is not provided.
+            - `False` or `'do_not_pad'` (default): No padding (i.e., can output a batch with 
+              sequences of different lengths).
+        max_length (`int`, *optional*):
+            Maximum length of the returned list and optionally padding length (see above).
+        pad_to_multiple_of (`int`, *optional*):
+            # If set, will pad the sequence to a multiple of the provided value. 
+            # This is especially useful to enable the use of Tensor Cores on 
+            # NVIDIA hardware with compute capability >= 7.5 (Volta).
+    """
+
+    tokenizer: PreTrainedTokenizerBase
+    padding: Union[bool, str, PaddingStrategy] = True
+    max_length: Optional[int] = None
+    pad_to_multiple_of: Optional[int] = None
+
+    def __call__(self, features):
+        label_name = "label" if "label" in features[0].keys() else "labels"
+        labels = [feature.pop(label_name) for feature in features]
+        batch_size = len(features)
+        num_choices = len(features[0]["input_ids"])
+        flattened_features = [
+            [{k: v[i] for k, v in feature.items()} for i in range(num_choices)]
+            for feature in features
+        ]
+        flattened_features = list(chain(*flattened_features))
+
+        batch = self.tokenizer.pad(
+            flattened_features,
+            padding=self.padding,
+            max_length=self.max_length,
+            pad_to_multiple_of=self.pad_to_multiple_of,
+            return_tensors="pt",
+        )
+
+        batch = {k: v.view(batch_size, num_choices, -1) for k, v in batch.items()}
+        batch["labels"] = torch.tensor(labels, dtype=torch.int64)
+        return batch
 
 def parse_args():
     """parse_args"""
@@ -258,72 +305,10 @@ def parse_args():
 
     return args
 
-
-@dataclass
-class DataCollatorForMultipleChoice:
-    """
-    Data collator that will dynamically pad the inputs for paragraph selection received.
-
-    Args:
-        tokenizer ([`PreTrainedTokenizer`] or [`PreTrainedTokenizerFast`]):
-            The tokenizer used for encoding the data.
-        padding (`bool`, `str` or [`~utils.PaddingStrategy`], *optional*, defaults to `True`):
-            Select a strategy to pad the returned sequences (according to the model's padding side 
-            and padding index) among:
-
-            - `True` or `'longest'`: Pad to the longest sequence in the batch (or no padding if 
-              only a single sequence is provided).
-            - `'max_length'`: Pad to a maximum length specified with the argument `max_length` or 
-              to the maximum acceptable input length for the model if that argument is not provided.
-            - `False` or `'do_not_pad'` (default): No padding (i.e., can output a batch with 
-              sequences of different lengths).
-        max_length (`int`, *optional*):
-            Maximum length of the returned list and optionally padding length (see above).
-        pad_to_multiple_of (`int`, *optional*):
-            # If set, will pad the sequence to a multiple of the provided value. 
-            # This is especially useful to enable the use of Tensor Cores on 
-            # NVIDIA hardware with compute capability >= 7.5 (Volta).
-    """
-
-    tokenizer: PreTrainedTokenizerBase
-    padding: Union[bool, str, PaddingStrategy] = True
-    max_length: Optional[int] = None
-    pad_to_multiple_of: Optional[int] = None
-
-    def __call__(self, features):
-        label_name = "label" if "label" in features[0].keys() else "labels"
-        labels = [feature.pop(label_name) for feature in features]
-        batch_size = len(features)
-        num_choices = len(features[0]["input_ids"])
-        flattened_features = [
-            [{k: v[i] for k, v in feature.items()} for i in range(num_choices)]
-            for feature in features
-        ]
-        flattened_features = list(chain(*flattened_features))
-
-        batch = self.tokenizer.pad(
-            flattened_features,
-            padding=self.padding,
-            max_length=self.max_length,
-            pad_to_multiple_of=self.pad_to_multiple_of,
-            return_tensors="pt",
-        )
-
-        # Un-flatten
-        batch = {k: v.view(batch_size, num_choices, -1) for k, v in batch.items()}
-        # Add back labels
-        batch["labels"] = torch.tensor(labels, dtype=torch.int64)
-        return batch
-
-
 def main():
     """main"""
     args = parse_args()
 
-    # Initialize the accelerator.
-    # We will let the accelerator handle device placement for us in this example.
-    # If we're using tracking, we also need to initialize it here
-    # and it will by default pick up all supported trackers in the environment
     accelerator_log_kwargs = {}
 
     if args.with_tracking:
@@ -337,20 +322,7 @@ def main():
     if args.output_dir:
         args.output_dir = Path(args.output_dir)
         args.output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Make one log on every process with the configuration for debugging.
-    logging.basicConfig(
-        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-        datefmt="%m/%d/%Y %H:%M:%S",
-        level=logging.INFO,
-    )
-    log_file = args.output_dir / "training.log"
-    file_handler = logging.FileHandler(log_file, mode="w")
-    file_handler.setFormatter(logging.Formatter(
-        fmt="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-        datefmt="%m/%d/%Y %H:%M:%S"
-    ))
-    logging.getLogger().addHandler(file_handler)
+        setup_logging(args.output_dir)
 
     logger.info(accelerator.state, main_process_only=False)
     if accelerator.is_local_main_process:
@@ -360,18 +332,14 @@ def main():
         datasets.utils.logging.set_verbosity_error()
         transformers.utils.logging.set_verbosity_error()
 
-    # If passed along, set the training seed now.
     if args.seed is not None:
         set_seed(args.seed)
 
-    # Handle the repository creation
     if accelerator.is_main_process:
         if args.push_to_hub:
-            # Retrieve of infer repo_name
             repo_name = args.hub_model_id
             if repo_name is None:
                 repo_name = args.output_dir.absolute().name
-            # Create repo and retrieve repo_id
             api = HfApi()
             repo_id = api.create_repo(repo_name, exist_ok=True, token=args.hub_token).repo_id
 
@@ -393,12 +361,9 @@ def main():
 
     raw_datasets = load_dataset(data_files, args.context_file)
 
-    # Trim a number of training examples
     if args.debug:
         for split in raw_datasets.keys():
             raw_datasets[split] = raw_datasets[split].select(range(100))
-    # See more about loading any type of standard or custom dataset (from files, python dict,
-    # pandas DataFrame, etc.) at https://huggingface.co/docs/datasets/loading_datasets.
 
     if raw_datasets["train"] is not None:
         column_names = raw_datasets["train"].column_names
@@ -407,18 +372,11 @@ def main():
     elif raw_datasets["test"] is not None:
         column_names = raw_datasets["test"].column_names
 
-    # When using your own dataset or a different dataset from swag,
-    # you will probably need to change this.
     ending_names = [f"ending{i}" for i in range(4)]
     context_name = "sent1"
     question_header_name = "sent2"
     label_column_name = "label" if "label" in column_names else "labels"
 
-    # Load pretrained model and tokenizer
-    #
-    # In distributed training, the .
-    # from_pretrained methods guarantee that only one local process can concurrently
-    # download model & vocab.
     if args.config_name:
         config = AutoConfig.from_pretrained(
             args.model_name_or_path, trust_remote_code=args.trust_remote_code
@@ -464,15 +422,10 @@ def main():
             config, trust_remote_code=args.trust_remote_code
         )
 
-    # We resize the embeddings only when necessary to avoid index errors.
-    # If you are creating a model from scratch on a small vocab
-    # and want a smaller embedding size, remove this test.
     embedding_size = model.get_input_embeddings().weight.shape[0]
     if len(tokenizer) > embedding_size:
         model.resize_token_embeddings(len(tokenizer))
 
-    # Preprocessing the datasets.
-    # First we tokenize all the texts.
     padding = "max_length" if args.pad_to_max_length else False
 
     def preprocess_function(examples):
@@ -484,11 +437,9 @@ def main():
         ]
         labels = examples[label_column_name]
 
-        # Flatten out
         first_sentences = list(chain(*first_sentences))
         second_sentences = list(chain(*second_sentences))
 
-        # Tokenize
         tokenized_examples = tokenizer(
             first_sentences,
             second_sentences,
@@ -496,7 +447,6 @@ def main():
             padding=padding,
             truncation=True,
         )
-        # Un-flatten
         tokenized_inputs = {
             k: [v[i : i + 4] for i in range(0, len(v), 4)] for k, v in tokenized_examples.items()
         }
@@ -522,20 +472,12 @@ def main():
     if args.test_file is not None:
         test_dataset = processed_datasets["test"]
 
-    # Log a few random samples from the training set:
     for index in random.sample(range(len(train_dataset)), 3):
         logger.info(f"Sample {index} of the training set: {train_dataset[index]}.")
 
-    # DataLoaders creation:
     if args.pad_to_max_length:
-        # If padding was already done ot max length,
-        # we use the default data collator that will just convert everything to tensors.
         data_collator = default_data_collator
     else:
-        # Otherwise, `DataCollatorWithPadding` will apply dynamic padding (by padding to the
-        # maximum length of the samples passed). When using mixed precision, we add
-        # `pad_to_multiple_of=8` to pad all tensors to multiples of 8, enabling the use of Tensor
-        # Cores on NVIDIA hardware with compute capability >= 7.5 (Volta).
         data_collator = DataCollatorForMultipleChoice(
             tokenizer, pad_to_multiple_of=(8 if accelerator.mixed_precision == 'fp16' else None)
         )
@@ -555,8 +497,6 @@ def main():
         )
 
     if args.num_train_epochs > 0 and args.train_file is not None:
-        # Optimizer
-        # Split weights in two groups, one with weight decay and the other not.
         no_decay = ["bias", "LayerNorm.weight"]
         optimizer_grouped_parameters = [
             {
@@ -574,11 +514,9 @@ def main():
         ]
         optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.learning_rate)
 
-        # Use the device given by the `accelerator` object.
         device = accelerator.device
         model.to(device)
 
-        # Scheduler and math around the number of training steps.
         overrode_max_train_steps = False
         num_update_steps_per_epoch = math.ceil(
             len(train_dataloader) / args.gradient_accumulation_steps
@@ -596,38 +534,28 @@ def main():
             else args.max_train_steps * accelerator.num_processes,
         )
 
-        # Prepare everything with our `accelerator`.
         model, optimizer, train_dataloader, eval_dataloader, lr_scheduler = accelerator.prepare(
             model, optimizer, train_dataloader, eval_dataloader, lr_scheduler
         )
 
-        # We need to recalculate our total training steps
-        # as the size of the training dataloader may have changed.
         num_update_steps_per_epoch = math.ceil(
             len(train_dataloader) / args.gradient_accumulation_steps
         )
         if overrode_max_train_steps:
             args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
-        # Afterwards we recalculate our number of training epochs
         args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
 
-        # Figure out how many steps we should save the Accelerator states
         checkpointing_steps = args.checkpointing_steps
         if checkpointing_steps is not None and checkpointing_steps.isdigit():
             checkpointing_steps = int(checkpointing_steps)
 
-        # We need to initialize the trackers we use, and also store our configuration.
-        # The trackers initializes automatically on the main process.
         if args.with_tracking:
             experiment_config = vars(args)
-            # TensorBoard cannot log Enums, need the raw value
             experiment_config["lr_scheduler_type"] = experiment_config["lr_scheduler_type"].value
             accelerator.init_trackers("swag_no_trainer", experiment_config)
 
-        # Metrics
         metric = evaluate.load("./src/accuracy.py")
 
-        # Train!
         total_batch_size = (
             args.per_device_train_batch_size
             * accelerator.num_processes
@@ -641,30 +569,25 @@ def main():
         logger.info(f"  Total train batch size = {total_batch_size}")
         logger.info(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
         logger.info(f"  Total optimization steps = {args.max_train_steps}")
-        # Only show the progress bar once on each machine.
         progress_bar = tqdm(
             range(args.max_train_steps), disable=not accelerator.is_local_main_process
         )
         completed_steps = 0
         starting_epoch = 0
 
-        # Potentially load in the weights and states from a previous save
         if args.resume_from_checkpoint:
             if args.resume_from_checkpoint is not None or args.resume_from_checkpoint != "":
                 checkpoint_path = args.resume_from_checkpoint
                 path = os.path.basename(args.resume_from_checkpoint)
             else:
-                # Get the most recent checkpoint
                 dirs = [f.name for f in os.scandir(os.getcwd()) if f.is_dir()]
                 dirs.sort(key=os.path.getctime)
-                # Sorts folders by date modified, most recent checkpoint is the last
                 path = dirs[-1]
                 checkpoint_path = path
                 path = os.path.basename(checkpoint_path)
 
             accelerator.print(f"Resumed from checkpoint: {checkpoint_path}")
             accelerator.load_state(checkpoint_path)
-            # Extract `epoch_{i}` or `step_{i}`
             training_difference = os.path.splitext(path)[0]
 
             if "epoch" in training_difference:
@@ -672,14 +595,12 @@ def main():
                 resume_step = None
                 completed_steps = starting_epoch * num_update_steps_per_epoch
             else:
-                # need to multiply `gradient_accumulation_steps` to reflect real steps
                 step_value = int(training_difference.replace("step_", ""))
                 resume_step = step_value * args.gradient_accumulation_steps
                 starting_epoch = resume_step // len(train_dataloader)
                 completed_steps = resume_step // args.gradient_accumulation_steps
                 resume_step -= starting_epoch * len(train_dataloader)
 
-        # update the progress_bar if load from checkpoint
         progress_bar.update(completed_steps)
 
         for epoch in range(starting_epoch, args.num_train_epochs):
@@ -687,7 +608,6 @@ def main():
             if args.with_tracking:
                 total_loss = 0
             if args.resume_from_checkpoint and epoch == starting_epoch and resume_step is not None:
-                # We skip the first `n` batches in the dataloader when resuming from a checkpoint
                 active_dataloader = accelerator.skip_first_batches(train_dataloader, resume_step)
             else:
                 active_dataloader = train_dataloader
@@ -695,7 +615,6 @@ def main():
                 with accelerator.accumulate(model):
                     outputs = model(**batch)
                     loss = outputs.loss
-                    # We keep track of the loss at each epoch
                     if args.with_tracking:
                         total_loss += loss.detach().float()
                     accelerator.backward(loss)
@@ -703,7 +622,6 @@ def main():
                     lr_scheduler.step()
                     optimizer.zero_grad()
 
-                # Checks if the accelerator has performed an optimization step behind the scenes
                 if accelerator.sync_gradients:
                     progress_bar.update(1)
                     completed_steps += 1
