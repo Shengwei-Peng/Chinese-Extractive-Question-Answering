@@ -2,9 +2,10 @@
 import json
 
 import torch
+from torch import nn
+from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from datasets import Dataset, DatasetDict
-
 
 def load_dataset(
     data_files: dict[str, str], context_file: str, end_to_end: bool = False
@@ -86,19 +87,33 @@ def load_dataset(
     return processed_datasets
 
 
-def predict_paragraph_selection(model, test_dataloader, test_data: list[dict]) -> list[dict]:
+def predict_paragraph_selection(
+    model: nn.Module,
+    test_dataloader: DataLoader,
+    test_dataset: Dataset,
+    output_file_path: str
+    ) -> None:
     """predict_paragraph_selection"""
     model.eval()
-    predicted = []
+    predicted_labels = []
+    predictions = []
 
     for batch in tqdm(test_dataloader, desc="Paragraph Selection", colour="red"):
         with torch.no_grad():
             outputs = model(**batch)
-            predictions = outputs.logits.argmax(dim=-1)
-            predicted.extend(predictions.cpu().tolist())
+            predicted_labels += outputs.logits.argmax(dim=-1).cpu().tolist()
 
-    for i, data in enumerate(test_data):
-        data["label"] = predicted[i]
-        data["context"] = data[f"ending{predicted[i]}"]
+    for i, predicted_label in enumerate(predicted_labels):
+        example = test_dataset[i]
 
-    return test_data
+        predictions.append({
+            "id": example["id"],
+            "question": example["question"],
+            "context": example[f"ending{predicted_label}"],
+            "answers": example["answers"]
+        })
+
+    with open(output_file_path, "w", encoding="utf-8") as json_file:
+        json.dump(predictions, json_file, ensure_ascii=False, indent=4)
+
+    print(f"Predictions saved to {output_file_path}")
