@@ -1,11 +1,28 @@
 """utils.py"""
 import json
+import logging
+from pathlib import Path
 
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from datasets import Dataset, DatasetDict
+
+
+def setup_logging(output_dir: Path) -> None:
+    logging.basicConfig(
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        datefmt="%m/%d/%Y %H:%M:%S",
+        level=logging.INFO,
+    )
+    log_file = output_dir / "training.log"
+    file_handler = logging.FileHandler(log_file, mode="w")
+    file_handler.setFormatter(logging.Formatter(
+        fmt="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        datefmt="%m/%d/%Y %H:%M:%S"
+    ))
+    logging.getLogger().addHandler(file_handler)
 
 def load_dataset(
     data_files: dict[str, str], context_file: str, end_to_end: bool = False
@@ -85,7 +102,6 @@ def load_dataset(
     processed_datasets = DatasetDict(processed_datasets)
     print(processed_datasets)
     return processed_datasets
-
 
 def predict_paragraph_selection(
     model: nn.Module,
