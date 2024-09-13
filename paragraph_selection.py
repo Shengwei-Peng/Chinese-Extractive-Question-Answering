@@ -653,6 +653,10 @@ def main():
             train_accuracy = metric.compute()["accuracy"]
             metrics["train_losses"].append(train_loss)
             metrics["train_metric"].append(train_accuracy)
+            accelerator.print(
+                f"Train Loss: {metrics['train_losses'][-1]}, "
+                f"Exact Match: {metrics['train_metric'][-1]}"
+            )
 
             if args.validation_file is not None:
                 logger.info("***** Running Evaluation *****")
@@ -678,6 +682,10 @@ def main():
 
                 metrics["valid_losses"].append(valid_total_loss / len(eval_dataloader))
                 metrics["valid_metric"].append(metric.compute()["accuracy"])
+                accelerator.print(
+                    f"Valid Loss: {metrics['valid_losses'][-1]}, "
+                    f"Exact Match: {metrics['valid_metric'][-1]}"
+                )
 
                 if args.with_tracking:
                     accelerator.log(
