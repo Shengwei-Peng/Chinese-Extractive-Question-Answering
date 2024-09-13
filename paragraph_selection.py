@@ -20,7 +20,6 @@ import argparse
 import json
 import math
 import os
-import random
 from dataclasses import dataclass
 from itertools import chain
 from pathlib import Path
@@ -50,7 +49,7 @@ from transformers import (
 )
 from transformers.utils import PaddingStrategy
 
-from src.utils import setup_logging, load_dataset, plot_metrics, predict_paragraph_selection
+from src.utils import setup_logging, load_dataset, plot_metrics, paragraph_selection
 
 logger = get_logger(__name__)
 MODEL_CONFIG_CLASSES = list(MODEL_MAPPING.keys())
@@ -354,8 +353,7 @@ def main():
                     gitignore.write("step_*\n")
                 if "epoch_*" not in gitignore:
                     gitignore.write("epoch_*\n")
-        elif args.output_dir is not None:
-            args.output_dir.mkdir(parents=True, exist_ok=True)
+
     accelerator.wait_for_everyone()
 
     data_files = {k: v for k, v in {
@@ -477,14 +475,11 @@ def main():
     if args.test_file is not None:
         test_dataset = processed_datasets["test"]
 
-    for index in random.sample(range(len(train_dataset)), 3):
-        logger.info(f"Sample {index} of the training set: {train_dataset[index]}.")
-
     if args.pad_to_max_length:
         data_collator = default_data_collator
     else:
         data_collator = DataCollatorForMultipleChoice(
-            tokenizer, pad_to_multiple_of=(8 if accelerator.mixed_precision == 'fp16' else None)
+            tokenizer, pad_to_multiple_of=(8 if accelerator.mixed_precision == "fp16" else None)
         )
 
     if args.train_file is not None:
@@ -504,9 +499,9 @@ def main():
     if args.num_train_epochs > 0 and args.train_file is not None:
         metrics = {
             "train_losses": [],
-            "val_losses": [],
-            "train_accuracies": [],
-            "val_accuracies": []
+            "valid_losses": [],
+            "train_metric": [],
+            "valid_metric": []
         }
 
         no_decay = ["bias", "LayerNorm.weight"]
@@ -657,17 +652,20 @@ def main():
             train_loss = total_loss / len(train_dataloader)
             train_accuracy = metric.compute()["accuracy"]
             metrics["train_losses"].append(train_loss)
-            metrics["train_accuracies"].append(train_accuracy)
+            metrics["train_metric"].append(train_accuracy)
 
             if args.validation_file is not None:
+                logger.info("***** Running Evaluation *****")
+                logger.info(f"  Num examples = {len(eval_dataset)}")
+                logger.info(f"  Batch size = {args.per_device_eval_batch_size}")
+
                 model.eval()
-                epoch_val_loss = 0
+                valid_total_loss = 0
 
                 for batch in eval_dataloader:
                     with torch.no_grad():
                         outputs = model(**batch)
-                    loss = outputs.loss
-                    epoch_val_loss += loss.detach().cpu().item()
+                    valid_total_loss += outputs.loss.detach().cpu().item()
 
                     predictions, references = accelerator.gather_for_metrics(
                         (outputs.logits.argmax(dim=-1), batch["labels"])
@@ -678,32 +676,19 @@ def main():
                         references=references,
                     )
 
-                val_loss = epoch_val_loss / len(eval_dataloader)
-                val_accuracy = metric.compute()["accuracy"]
-                metrics["val_losses"].append(val_loss)
-                metrics["val_accuracies"].append(val_accuracy)
-
-                accelerator.print(
-                    f"Epoch {epoch+1}: Train Loss = {train_loss}, Train Accuracy = {train_accuracy}"
-                )
-                accelerator.print(
-                    f"Epoch {epoch+1}: Valid Loss = {val_loss}, Valid Accuracy = {val_accuracy}"
-                )
+                metrics["valid_losses"].append(valid_total_loss / len(eval_dataloader))
+                metrics["valid_metric"].append(metric.compute()["accuracy"])
 
                 if args.with_tracking:
                     accelerator.log(
                         {
-                            "accuracy": val_accuracy,
-                            "train_loss": train_loss,
+                            "accuracy": metrics["valid_metric"][-1],
+                            "train_loss": metrics["train_losses"][-1],
                             "epoch": epoch+1,
                             "step": completed_steps,
                         },
                         step=completed_steps,
                     )
-            else:
-                accelerator.print(
-                    f"Epoch {epoch+1}: Train Loss = {train_loss}, Train Accuracy = {train_accuracy}"
-                )
 
             if args.push_to_hub and epoch < args.num_train_epochs - 1:
                 accelerator.wait_for_everyone()
@@ -734,11 +719,11 @@ def main():
 
     if args.test_file is not None:
         model, test_dataloader = accelerator.prepare(model, test_dataloader)
-        predict_paragraph_selection(
+        paragraph_selection(
             model=model,
             test_dataloader=test_dataloader,
             test_dataset=raw_datasets["test"],
-            output_file_path=args.output_dir / "predictions.json"
+            prediction_path=args.output_dir / "predictions.json"
         )
 
     if args.output_dir is not None:
