@@ -655,7 +655,7 @@ def main():
             metrics["train_metric"].append(train_accuracy)
             accelerator.print(
                 f"Train Loss: {metrics['train_losses'][-1]}, "
-                f"Exact Match: {metrics['train_metric'][-1]}"
+                f"Accuracy: {metrics['train_metric'][-1]}"
             )
 
             if args.validation_file is not None:
@@ -684,7 +684,7 @@ def main():
                 metrics["valid_metric"].append(metric.compute()["accuracy"])
                 accelerator.print(
                     f"Valid Loss: {metrics['valid_losses'][-1]}, "
-                    f"Exact Match: {metrics['valid_metric'][-1]}"
+                    f"Accuracy: {metrics['valid_metric'][-1]}"
                 )
 
                 if args.with_tracking:
