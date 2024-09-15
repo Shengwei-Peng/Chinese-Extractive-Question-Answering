@@ -914,7 +914,7 @@ def main():
                     f"Exact Match: {metrics['valid_metric'][-1]}"
                 )
 
-    plot_metrics(metrics, args.validation_file is not None, args.output_dir)
+        plot_metrics(metrics, args.validation_file is not None, args.output_dir)
 
     if args.do_predict:
         model, predict_dataloader = accelerator.prepare(model, predict_dataloader)
@@ -926,7 +926,7 @@ def main():
         all_end_logits = []
         model.eval()
 
-        for batch in predict_dataloader:
+        for batch in tqdm(predict_dataloader, desc="Span Selection", colour="red"):
             with torch.no_grad():
                 outputs = model(**batch)
                 start_logits = outputs.start_logits
