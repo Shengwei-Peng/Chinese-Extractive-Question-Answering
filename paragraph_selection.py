@@ -300,6 +300,12 @@ def parse_args():
         action="store_true",
         help="If passed, use a pretrained model. Otherwise, train from scratch."
     )
+    parser.add_argument(
+        "--prediction_path",
+        type=str,
+        default="prediction.json",
+        help="Path to the output prediction file. Default is 'prediction.json'.",
+    )
     args = parser.parse_args()
 
     if args.push_to_hub:
@@ -368,11 +374,11 @@ def main():
         for split in raw_datasets.keys():
             raw_datasets[split] = raw_datasets[split].select(range(100))
 
-    if raw_datasets["train"] is not None:
+    if args.train_file is not None:
         column_names = raw_datasets["train"].column_names
-    elif raw_datasets["validation"] is not None:
+    elif args.validation_file is not None:
         column_names = raw_datasets["validation"].column_names
-    elif raw_datasets["test"] is not None:
+    elif args.test_file is not None:
         column_names = raw_datasets["test"].column_names
 
     ending_names = [f"ending{i}" for i in range(4)]
@@ -561,7 +567,7 @@ def main():
             experiment_config["lr_scheduler_type"] = experiment_config["lr_scheduler_type"].value
             accelerator.init_trackers("swag_no_trainer", experiment_config)
 
-        metric = evaluate.load("./src/accuracy.py")
+        metric = evaluate.load("accuracy")
 
         total_batch_size = (
             args.per_device_train_batch_size
@@ -731,7 +737,7 @@ def main():
             model=model,
             test_dataloader=test_dataloader,
             test_dataset=raw_datasets["test"],
-            prediction_path=args.output_dir / "predictions.json"
+            prediction_path=Path(args.prediction_path)
         )
 
     if args.output_dir is not None:
