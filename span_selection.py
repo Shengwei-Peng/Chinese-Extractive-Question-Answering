@@ -324,6 +324,11 @@ def parse_args():
         default="prediction.csv",
         help="Path to the output prediction file. Default is 'prediction.csv'.",
     )
+    parser.add_argument(
+        "--end_to_end",
+        action="store_true",
+        help="If passed, directly train the extractive QA task."
+    )
     args = parser.parse_args()
 
     if (
@@ -402,7 +407,7 @@ def main():
         "test": args.test_file
     }.items() if v is not None}
 
-    raw_datasets = load_dataset(data_files, args.context_file)
+    raw_datasets = load_dataset(data_files, args.context_file, end_to_end=args.end_to_end)
 
     if args.config_name:
         config = AutoConfig.from_pretrained(
