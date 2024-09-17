@@ -65,7 +65,7 @@ python python span_selection.py \
     --use_pretrained \
     --do_predict \
     --output_dir ./span_selection \
-    --prediction_path ./prediction.json
+    --prediction_path ./prediction.csv
 ```
 ### ⚠️ Special Note:
 - In **Span Selection**, the `test_file` parameter should be set to the **prediction file from the Paragraph Selection** step (i.e., `./test/paragraph_selection/prediction.json`).
