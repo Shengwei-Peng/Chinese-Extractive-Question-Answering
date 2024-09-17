@@ -2,10 +2,15 @@
 
 ## Table of Contents
 
+- [Overview](#overview)
 - [Installation](#installation)
 - [Usage](#usage)
 - [Acknowledgements](#acknowledgements)
 - [Contact](#contact)
+
+## Overview
+
+This project focuses on Chinese extractive question answering (QA), a task where a model is trained to select a relevant span of text from a given context to answer a specific question. The model first identifies the most relevant paragraphs, and then extracts the precise answer spans from those paragraphs.
 
 ## Installation
 
@@ -29,6 +34,7 @@ To perform Chinese extractive question answering, you can either follow two step
 ### Option 1: Two-Step Process
 
 #### Step 1: Paragraph Selection
+
 The first step is to select relevant paragraphs from the context file. Use the following command to train and predict paragraph selection:
 
 ```bash
@@ -50,6 +56,7 @@ python paragraph_selection.py \
 ```
 
 #### Step 2: Span Selection
+
 Once you have the paragraph predictions from Step 1, proceed to the span selection step to extract the answer spans from the selected paragraphs. Use the following command:
 
 ```bash
@@ -71,10 +78,12 @@ python python span_selection.py \
     --prediction_path ./prediction.csv
 ```
 #### ⚠️ Special Note:
+
 - In **Span Selection**, the `test_file` parameter should be set to the **prediction file from the Paragraph Selection** step (i.e., `./test/paragraph_selection/prediction.json`).
 - **Paragraph Selection** saves its predictions in a **JSON file**, while **Span Selection** saves the final answer predictions in a **CSV file**. Make sure to use the appropriate formats for each step.
 
 ### Option 2: End-to-End Process
+
 You can run the entire process in one step using the `--end_to_end` argument in the `span_selection.py` script. This will directly train and predict the extractive QA task without running `paragraph_selection` separately.
 
 ```bash
@@ -101,8 +110,7 @@ python span_selection.py \
 
 This project is based on the example code provided by Hugging Face in their [Transformers repository](https://github.com/huggingface/transformers/tree/main/examples/pytorch). We have made modifications to adapt the code for our specific use case.
 
-Special thanks to the [NTU MILab](http://adl.miulab.tw) professors and teaching assistants for providing the dataset and offering invaluable support throughout the project.
-
+Special thanks to the [NTU Miulab](http://adl.miulab.tw) professors and teaching assistants for providing the dataset and offering invaluable support throughout the project.
 
 ## Contact
 
