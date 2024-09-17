@@ -4,6 +4,7 @@
 
 - [Installation](#installation)
 - [Usage](#usage)
+- [Acknowledgements](#acknowledgements)
 - [Contact](#contact)
 
 ## Installation
@@ -93,8 +94,15 @@ python span_selection.py \
     --do_predict \
     --output_dir ./span_selection \
     --prediction_path ./prediction.csv
-    --end_to_end \
+    --end_to_end
 ```
+
+## Acknowledgements
+
+This project is based on the example code provided by Hugging Face in their [Transformers repository](https://github.com/huggingface/transformers/tree/main/examples/pytorch). We have made modifications to adapt the code for our specific use case.
+
+Special thanks to the [NTU MILab](http://adl.miulab.tw) professors and teaching assistants for providing the dataset and offering invaluable support throughout the project.
+
 
 ## Contact
 
