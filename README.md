@@ -5,6 +5,7 @@
 - [Overview](#overview)
 - [Installation](#installation)
 - [Usage](#usage)
+- [Inference](#inference)
 - [Acknowledgements](#acknowledgements)
 - [Contact](#contact)
 
@@ -49,10 +50,11 @@ python paragraph_selection.py \
     --num_train_epochs 1 \
     --per_device_train_batch_size 1 \
     --gradient_accumulation_steps 2 \
+    --per_device_eval_batch_size 8 \
     --seed 11207330 \
     --use_pretrained \
-    --output_dir ./paragraph_selection \
-    --prediction_path ./paragraph_selection/prediction.json
+    --output_dir ./paragraph_selection/bert \
+    --prediction_path ./paragraph_selection/bert/prediction.json
 ```
 
 #### Step 2: Span Selection
@@ -60,21 +62,22 @@ python paragraph_selection.py \
 Once you have the paragraph predictions from Step 1, proceed to the span selection step to extract the answer spans from the selected paragraphs. Use the following command:
 
 ```bash
-python python span_selection.py \
+python span_selection.py \
     --model_name_or_path google-bert/bert-base-chinese \
     --train_file ./ntu-adl-2024-hw-1-chinese-extractive-qa/train.json \
     --validation_file ./ntu-adl-2024-hw-1-chinese-extractive-qa/valid.json \
     --context_file ./ntu-adl-2024-hw-1-chinese-extractive-qa/context.json \
-    --test_file ./paragraph_selection/prediction.json \
+    --test_file ./paragraph_selection/bert/prediction.json \
     --max_seq_length 512 \
     --learning_rate 3e-5 \
     --num_train_epochs 3 \
     --per_device_train_batch_size 1 \
     --gradient_accumulation_steps 2 \
+    --per_device_eval_batch_size 8 \
     --seed 11207330 \
     --use_pretrained \
     --do_predict \
-    --output_dir ./span_selection \
+    --output_dir ./span_selection/bert \
     --prediction_path ./prediction.csv
 ```
 #### ⚠️ Special Note:
@@ -98,11 +101,61 @@ python span_selection.py \
     --num_train_epochs 3 \
     --per_device_train_batch_size 1 \
     --gradient_accumulation_steps 2 \
+    --per_device_eval_batch_size 8 \
     --seed 11207330 \
     --use_pretrained \
     --do_predict \
-    --output_dir ./span_selection \
+    --output_dir ./end_to_end/bert \
     --prediction_path ./prediction.csv
+    --end_to_end
+```
+
+## Inference
+
+If you already have trained models and wish to only perform inference without retraining, you can use the following commands:
+
+### Step 1: Paragraph Selection (Only Inference)
+
+```bash
+python paragraph_selection.py \
+    --model_name_or_path ./paragraph_selection/bert \
+    --context_file ./ntu-adl-2024-hw-1-chinese-extractive-qa/context.json \
+    --test_file ./ntu-adl-2024-hw-1-chinese-extractive-qa/test.json \
+    --max_seq_length 512 \
+    --per_device_eval_batch_size 8 \
+    --seed 11207330 \
+    --use_pretrained \
+    --prediction_path ./paragraph_selection/bert/prediction.json
+```
+
+### Step 2: Span Selection (Only Inference)
+
+```bash
+python span_selection.py \
+    --model_name_or_path ./span_selection/bert \
+    --context_file ./ntu-adl-2024-hw-1-chinese-extractive-qa/context.json \
+    --test_file ./paragraph_selection/bert/prediction.json \
+    --max_seq_length 512 \
+    --per_device_eval_batch_size 8 \    
+    --seed 11207330 \
+    --use_pretrained \
+    --do_predict \
+    --prediction_path ./prediction.csv
+```
+
+### End-to-End (Only Inference)
+
+```bash
+python span_selection.py \
+    --model_name_or_path ./end_to_end/bert \
+    --context_file ./ntu-adl-2024-hw-1-chinese-extractive-qa/context.json \
+    --test_file ./ntu-adl-2024-hw-1-chinese-extractive-qa/test.json \
+    --max_seq_length 512 \
+    --per_device_eval_batch_size 8 \
+    --seed 11207330 \
+    --use_pretrained \
+    --do_predict \
+    --prediction_path ./prediction.csv \
     --end_to_end
 ```
 
