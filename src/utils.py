@@ -113,7 +113,7 @@ def paragraph_selection(
     model.eval()
     predicted_labels = []
     predictions = []
-
+    prediction_path.parent.mkdir(parents=True, exist_ok=True)
     for batch in tqdm(test_dataloader, desc="Paragraph Selection", colour="red"):
         with torch.no_grad():
             outputs = model(**batch)
