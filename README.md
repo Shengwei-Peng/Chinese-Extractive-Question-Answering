@@ -7,6 +7,7 @@
 - [Usage](#usage)
 - [Inference](#inference)
 - [Acknowledgements](#acknowledgements)
+- [License](#license)
 - [Contact](#contact)
 
 ## Overview 🌟
@@ -32,7 +33,7 @@ This project focuses on Chinese extractive question answering (QA), a task where
 
 To perform Chinese extractive question answering, you can either follow two steps: **Paragraph Selection** and **Span Selection**, or use the **End-to-End** approach to complete the entire process in one step.
 
-### Option 1: Two-Step Process ➡️
+### Option 1: Two-Step Process
 
 #### Step 1: Paragraph Selection
 
@@ -85,7 +86,7 @@ python span_selection.py \
 - In **Span Selection**, the `test_file` parameter should be set to the **prediction file from the Paragraph Selection** step (i.e., `./test/paragraph_selection/prediction.json`).
 - **Paragraph Selection** saves its predictions in a **JSON file**, while **Span Selection** saves the final answer predictions in a **CSV file**. Make sure to use the appropriate formats for each step.
 
-### Option 2: End-to-End Process 🚀
+### Option 2: End-to-End Process
 
 You can run the entire process in one step using the `--end_to_end` argument in the `span_selection.py` script. This will directly train and predict the extractive QA task without running `paragraph_selection` separately.
 
@@ -164,6 +165,10 @@ python span_selection.py \
 This project is based on the example code provided by Hugging Face in their [Transformers repository](https://github.com/huggingface/transformers/tree/main/examples/pytorch). We have made modifications to adapt the code for our specific use case.
 
 Special thanks to the [NTU Miulab](http://adl.miulab.tw) professors and teaching assistants for providing the dataset and offering invaluable support throughout the project.
+
+## License ⚖️
+
+This project is licensed under the Apache License 2.0. See the [LICENSE](./LICENSE) file for more details.
 
 ## Contact ✉️
 
