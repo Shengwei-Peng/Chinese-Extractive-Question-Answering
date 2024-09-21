@@ -1,4 +1,4 @@
-# Chinese Extractive Question Answering
+# Chinese-Extractive-Question-Answering
 
 ## Table of Contents 📚
 
@@ -17,11 +17,11 @@ This project focuses on Chinese extractive question answering (QA), a task where
 
 1. Clone the repository:
     ```sh
-    git clone https://github.com/Shengwei-Peng/chinese-extractive-question-answering.git
+    git clone https://github.com/Shengwei-Peng/Chinese-Extractive-Question-Answering.git
     ```
 2. Navigate to the project directory:
     ```sh
-    cd chinese-extractive-question-answering
+    cd Chinese-Extractive-Question-Answering
     ```
 3. Install the required dependencies:
     ```sh
