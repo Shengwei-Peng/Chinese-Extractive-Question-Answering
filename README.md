@@ -1,6 +1,6 @@
 # Chinese-Extractive-Question-Answering
 
-## Table of Contents 📚
+## 📚 Table of Contents
 
 - [Overview](#overview)
 - [Installation](#installation)
@@ -10,11 +10,11 @@
 - [License](#license)
 - [Contact](#contact)
 
-## Overview 🌟
+## 🌟 Overview
 
 This project focuses on Chinese extractive question answering (QA), a task where a model is trained to select a relevant span of text from a given context to answer a specific question. The model first identifies the most relevant paragraphs, and then extracts the precise answer spans from those paragraphs.
 
-## Installation 💻
+## 💻 Installation
 
 1. Clone the repository:
     ```sh
@@ -29,7 +29,7 @@ This project focuses on Chinese extractive question answering (QA), a task where
     pip install -r requirements.txt
     ```
 
-## Usage ⚙️
+## ⚙️ Usage
 
 To perform Chinese extractive question answering, you can either follow two steps: **Paragraph Selection** and **Span Selection**, or use the **End-to-End** approach to complete the entire process in one step.
 
@@ -111,11 +111,11 @@ python span_selection.py \
     --end_to_end
 ```
 
-## Inference 🔮
+## 🔮 Inference
 
 If you already have trained models and wish to only perform inference without retraining, you can use the following commands:
 
-### Step 1: Paragraph Selection (Only Inference)
+### Paragraph Selection (Only Inference)
 
 ```bash
 python paragraph_selection.py \
@@ -129,7 +129,7 @@ python paragraph_selection.py \
     --prediction_path ./paragraph_selection/bert/prediction.json
 ```
 
-### Step 2: Span Selection (Only Inference)
+### Span Selection (Only Inference)
 
 ```bash
 python span_selection.py \
@@ -160,16 +160,16 @@ python span_selection.py \
     --end_to_end
 ```
 
-## Acknowledgements 🙏
+## 🙏 Acknowledgements
 
 This project is based on the example code provided by Hugging Face in their [Transformers repository](https://github.com/huggingface/transformers/tree/main/examples/pytorch). We have made modifications to adapt the code for our specific use case.
 
 Special thanks to the [NTU Miulab](http://adl.miulab.tw) professors and teaching assistants for providing the dataset and offering invaluable support throughout the project.
 
-## License ⚖️
+## ⚖️ License
 
 This project is licensed under the Apache License 2.0. See the [LICENSE](./LICENSE) file for more details.
 
-## Contact ✉️
+## ✉️ Contact
 
 For any questions or inquiries, please contact m11207330@mail.ntust.edu.tw
